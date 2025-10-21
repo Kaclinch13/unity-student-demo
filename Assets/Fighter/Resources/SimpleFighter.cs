@@ -45,6 +45,8 @@ public class BasicFighter2D : MonoBehaviour
     public int maxHP;                  // > 0
 
     [Header("Health Bar - REQUIRED")]
+    [Tooltip("Use a custom health bar implementation instead of the built-in one")]
+    public bool customHealthBar = false;
     [Tooltip("REQUIRED: Sprite for healthbar (white square recommended)")]
     public Sprite healthBarSprite;
     [Tooltip("REQUIRED: X offset from player")]
@@ -65,6 +67,8 @@ public class BasicFighter2D : MonoBehaviour
     [Header("State Animations - REQUIRED")]
     [Tooltip("REQUIRED: Idle animation clip")]
     public AnimationClip animIdle;
+    [Tooltip("REQUIRED: LightAttack animation clip")]
+    public AnimationClip animLightAttack;
     [Tooltip("REQUIRED: Walk animation clip")]
     public AnimationClip animWalk;
     [Tooltip("REQUIRED: Jump animation clip")]
@@ -102,7 +106,7 @@ public class BasicFighter2D : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────────
     // INTERNAL STATE
     // ─────────────────────────────────────────────────────────────────────────────
-    enum State { Idle, Walk, Jump, Fall, Dash, Attack, Hitstun, KO }
+    enum State { Idle, LightAttack, Walk, Jump, Fall, Dash, Attack, Hitstun, KO }
     State state;
     State prevState; // Track state changes for animation updates
     bool grounded;
@@ -110,9 +114,8 @@ public class BasicFighter2D : MonoBehaviour
     bool faceRight = true;
     bool initialFlipX = false; // Store initial sprite flip state
 
-    private int hp; // Public for debugging
+    private int hp;
     private bool isDead = false;
-    private float deathAnimTimer = 0f;
 
     Attack currentAttack;
     float attackTimer;
@@ -121,6 +124,22 @@ public class BasicFighter2D : MonoBehaviour
 
     // Registry for hit-detect
     static readonly List<BasicFighter2D> registry = new List<BasicFighter2D>();
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PUBLIC ACCESSORS
+    // ─────────────────────────────────────────────────────────────────────────────
+    public int GetCurrentHP() => hp;
+    public int GetMaxHP() => maxHP;
+    
+    /// <summary>Debug method: Reduce HP by specified amount without knockback or hitstun</summary>
+    public void DebugReduceHP(int amount)
+    {
+        hp = Mathf.Max(0, hp - amount);
+        if (hp <= 0 && !isDead)
+        {
+            EnterDeathState();
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────────
     // DATA
@@ -195,7 +214,11 @@ public class BasicFighter2D : MonoBehaviour
             maxHP = 1; // Ensure maxHP is valid for death logic
         }
         
-        SetupHealthBar();
+        // Only setup health bar if not using custom implementation
+        if (!customHealthBar)
+        {
+            SetupHealthBar();
+        }
 
         // Start in idle state
         state = State.Idle;
@@ -232,7 +255,13 @@ public class BasicFighter2D : MonoBehaviour
         UpdateTimers();
         ProcessInput();
         UpdateStateAnimation();
-        UpdateHealthBar();
+        
+        // Only update built-in health bar if not using custom implementation
+        if (!customHealthBar)
+        {
+            UpdateHealthBar();
+        }
+        
         SampleCurrentAnimation();
         
         if (debugAttacks)
@@ -303,6 +332,12 @@ public class BasicFighter2D : MonoBehaviour
         bool medium = Input.GetKeyDown(keyMedium);
         bool heavy = Input.GetKeyDown(keyHeavy);
 
+        // Also check if AI is making us move (for AI-controlled fighters)
+        if (Mathf.Abs(move) < 0.05f && Mathf.Abs(rb.linearVelocity.x) > 0.5f)
+        {
+            move = Mathf.Sign(rb.linearVelocity.x);
+        }
+
         // Ground check and facing
         grounded = IsGrounded();
         if (Mathf.Abs(move) > 0.001f) faceRight = move > 0f;
@@ -320,6 +355,17 @@ public class BasicFighter2D : MonoBehaviour
                 break;
 
             case State.Jump:
+                // Transition to fall when moving downwards
+                if (rb.linearVelocity.y < 0f)
+                {
+                    state = State.Fall;
+                }
+                // Allow dashing and attacking in air
+                else if (dash) StartDash();
+                else if (TryAttack(light, medium, heavy)) { }
+                else if (grounded) state = (Mathf.Abs(move) > 0.05f) ? State.Walk : State.Idle;
+                break;
+
             case State.Fall:
                 // Allow dashing and attacking in air
                 if (dash) StartDash();
@@ -492,7 +538,9 @@ public class BasicFighter2D : MonoBehaviour
         // Hit detection during active frames
         float activeStart = currentAttack.startup;
         float activeEnd = activeStart + currentAttack.active;
-        if (attackTimer >= activeStart && attackTimer <= activeEnd)
+        
+        // Check if we're in the active window and detect hits every frame during this window
+        if (attackTimer >= activeStart && attackTimer < activeEnd)
         {
             DetectHits(currentAttack);
         }
@@ -515,9 +563,25 @@ public class BasicFighter2D : MonoBehaviour
         
         foreach (var col in hits)
         {
-            var target = col.GetComponentInParent<BasicFighter2D>();
-            if (target == null || target == this || victimsThisSwing.Contains(target)) 
+            // Try to get component from the collider's GameObject first, then parent
+            var target = col.GetComponent<BasicFighter2D>();
+            if (target == null)
+                target = col.GetComponentInParent<BasicFighter2D>();
+            
+            if (target == null)
+            {
                 continue;
+            }
+            
+            if (target == this)
+            {
+                continue;
+            }
+            
+            if (victimsThisSwing.Contains(target))
+            {
+                continue;
+            }
 
             victimsThisSwing.Add(target);
             target.TakeHit(this, attack);
@@ -529,6 +593,7 @@ public class BasicFighter2D : MonoBehaviour
         if (state == State.KO || isDead) return;
 
         // Apply damage
+        int oldHP = hp;
         hp = Mathf.Max(0, hp - attack.damage);
         
         if (hp <= 0)
@@ -554,7 +619,6 @@ public class BasicFighter2D : MonoBehaviour
     {
         state = State.KO;
         isDead = true;
-        deathAnimTimer = 0f;
         
         // Stop and disable physics
         rb.linearVelocity = Vector2.zero;
@@ -585,9 +649,6 @@ public class BasicFighter2D : MonoBehaviour
             return;
         }
         
-        // Play death animation once, then freeze on last frame
-        deathAnimTimer += Time.deltaTime;
-        
         // Ensure we're playing the death animation
         if (currentClip != animKO)
         {
@@ -595,24 +656,59 @@ public class BasicFighter2D : MonoBehaviour
             animationTime = 0f;
         }
         
-        // Keep sampling the animation
+        // Play animation once, then freeze
         if (animationTime < animKO.length)
         {
-            // Continue playing
-            SampleCurrentAnimation();
+            animationTime += Time.deltaTime;
+            SampleCurrentAnimationNoLoop();
         }
         else
         {
-            // Freeze on last frame
-            animationTime = animKO.length - 0.001f; // Stay on last frame
-            SampleCurrentAnimation();
-            
-            // Disable the script after animation completes
+            // Freeze on last frame - don't sample again, just stay there
             if (enabled)
             {
                 enabled = false;
             }
         }
+    }
+    
+    void SampleCurrentAnimationNoLoop()
+    {
+        if (currentClip == null || sprite == null)
+        {
+            return;
+        }
+
+        // MANUAL SPRITE EXTRACTION from AnimationClip (NO LOOPING)
+        #if UNITY_EDITOR
+        var spriteBindings = UnityEditor.AnimationUtility.GetObjectReferenceCurveBindings(currentClip);
+        foreach (var binding in spriteBindings)
+        {
+            if (binding.propertyName == "m_Sprite" && binding.type == typeof(SpriteRenderer))
+            {
+                var keyframes = UnityEditor.AnimationUtility.GetObjectReferenceCurve(currentClip, binding);
+                if (keyframes.Length > 0)
+                {
+                    // Find the appropriate keyframe for current time
+                    Sprite targetSprite = null;
+                    for (int i = keyframes.Length - 1; i >= 0; i--)
+                    {
+                        if (animationTime >= keyframes[i].time)
+                        {
+                            targetSprite = keyframes[i].value as Sprite;
+                            break;
+                        }
+                    }
+                    
+                    if (targetSprite != null && sprite.sprite != targetSprite)
+                    {
+                        sprite.sprite = targetSprite;
+                    }
+                }
+                break;
+            }
+        }
+        #endif
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -770,7 +866,7 @@ public class BasicFighter2D : MonoBehaviour
         // Create root
         healthBarRoot = new GameObject($"{fighterName}_HealthBar").transform;
         healthBarRoot.SetParent(transform, false);
-        healthBarRoot.localPosition = new Vector3(healthBarOffsetX, healthBarOffsetY, -1f); // Ensure it's in front
+        healthBarRoot.localPosition = new Vector3(healthBarOffsetX, healthBarOffsetY, -1f);
 
         // Background - use the provided sprite
         var bgObj = new GameObject("Background");
@@ -782,20 +878,20 @@ public class BasicFighter2D : MonoBehaviour
         bgObj.transform.localScale = new Vector3(healthBarScaleX + 0.05f, healthBarScaleY + 0.05f, 1f);
         bgObj.transform.localPosition = Vector3.zero;
 
-        // Fill - use the provided sprite with full alpha
+        // Fill - simple sprite with scale
         var fillObj = new GameObject("Fill");
         fillObj.transform.SetParent(healthBarRoot, false);
-        fillObj.transform.localPosition = Vector3.zero;
         healthBarFill = fillObj.AddComponent<SpriteRenderer>();
         healthBarFill.sprite = healthBarSprite;
         
-        // Ensure colors have full alpha
+        // Set color with full alpha
         Color fullColor = healthBarColorFull;
         fullColor.a = 1f;
         healthBarFill.color = fullColor;
         
         healthBarFill.sortingOrder = healthBarSortingOrder + 1;
         fillObj.transform.localScale = new Vector3(healthBarScaleX, healthBarScaleY, 1f);
+        fillObj.transform.localPosition = Vector3.zero;
     }
 
     Sprite CreateWhiteSprite()
@@ -822,13 +918,14 @@ public class BasicFighter2D : MonoBehaviour
             return;
         }
         
-        Vector3 newScale = new Vector3(healthBarScaleX * hpRatio, healthBarScaleY, 1f);
-        healthBarFill.transform.localScale = newScale;
+        // Update fill by scaling width only (drains from right to left)
+        Vector3 currentScale = healthBarFill.transform.localScale;
+        currentScale.x = healthBarScaleX * hpRatio;
+        healthBarFill.transform.localScale = currentScale;
         
-        // Lerp color and ensure alpha is always 1
-        Color newColor = Color.Lerp(healthBarColorEmpty, healthBarColorFull, hpRatio);
-        newColor.a = 1f;
-        healthBarFill.color = newColor;
+        // Adjust position to keep bar anchored on the left
+        float xOffset = healthBarScaleX * (1f - hpRatio) * -0.5f;
+        healthBarFill.transform.localPosition = new Vector3(xOffset, 0f, 0f);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -922,19 +1019,103 @@ public class BasicFighter2D : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────────
     // GIZMOS
     // ─────────────────────────────────────────────────────────────────────────────
-    void OnDrawGizmosSelected()
+    void OnDrawGizmos()
     {
-        // Ground check visualization
+        // Always draw fighter name
+        #if UNITY_EDITOR
+        UnityEditor.Handles.Label(transform.position + Vector3.up * 2f, fighterName);
+        #endif
+        
+        // Ground check visualization (cyan sphere)
         Gizmos.color = Color.cyan;
         Vector2 groundOrigin = (Vector2)transform.position + groundCheckOffset;
         Gizmos.DrawWireSphere(groundOrigin, groundCheckRadius);
 
-        // Active attack hitbox visualization
+        // Body collider (green box)
+        if (body != null)
+        {
+            Gizmos.color = new Color(0f, 1f, 0f, 0.3f);
+            if (body is BoxCollider2D box)
+            {
+                Vector2 center = (Vector2)transform.position + box.offset;
+                Vector3 size = new Vector3(box.size.x * transform.localScale.x, box.size.y * transform.localScale.y, 0.1f);
+                Gizmos.DrawWireCube(center, size);
+            }
+            else if (body is CapsuleCollider2D capsule)
+            {
+                Vector2 center = (Vector2)transform.position + capsule.offset;
+                // Draw capsule as wire sphere at top and bottom with lines connecting
+                float radius = capsule.size.x * 0.5f * Mathf.Abs(transform.localScale.x);
+                float height = capsule.size.y * Mathf.Abs(transform.localScale.y);
+                Vector2 topCenter = center + Vector2.up * (height * 0.5f - radius);
+                Vector2 bottomCenter = center + Vector2.down * (height * 0.5f - radius);
+                Gizmos.DrawWireSphere(topCenter, radius);
+                Gizmos.DrawWireSphere(bottomCenter, radius);
+            }
+            else if (body is CircleCollider2D circle)
+            {
+                Vector2 center = (Vector2)transform.position + circle.offset;
+                float radius = circle.radius * Mathf.Max(Mathf.Abs(transform.localScale.x), Mathf.Abs(transform.localScale.y));
+                Gizmos.DrawWireSphere(center, radius);
+            }
+        }
+
+        // Active attack hitbox (red filled box)
         if (state == State.Attack && currentAttack != null)
         {
-            Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.5f);
+            Gizmos.color = new Color(1f, 0f, 0f, 0.6f);
             Vector2 hitboxCenter = (Vector2)transform.position + FlipVector(currentAttack.hitboxOffset);
+            Gizmos.DrawCube(hitboxCenter, currentAttack.hitboxSize);
+            
+            // Draw wire frame too
+            Gizmos.color = Color.red;
             Gizmos.DrawWireCube(hitboxCenter, currentAttack.hitboxSize);
         }
+        
+        // Show potential attack ranges when not attacking (yellow/orange)
+        if (state != State.Attack && !isDead)
+        {
+            // Light attack range
+            if (lightAttack != null)
+            {
+                Gizmos.color = new Color(1f, 1f, 0f, 0.15f);
+                Vector2 lightCenter = (Vector2)transform.position + FlipVector(lightAttack.hitboxOffset);
+                Gizmos.DrawWireCube(lightCenter, lightAttack.hitboxSize);
+            }
+            
+            // Medium attack range
+            if (mediumAttack != null)
+            {
+                Gizmos.color = new Color(1f, 0.6f, 0f, 0.15f);
+                Vector2 medCenter = (Vector2)transform.position + FlipVector(mediumAttack.hitboxOffset);
+                Gizmos.DrawWireCube(medCenter, mediumAttack.hitboxSize);
+            }
+            
+            // Heavy attack range
+            if (heavyAttack != null)
+            {
+                Gizmos.color = new Color(1f, 0.3f, 0f, 0.15f);
+                Vector2 heavyCenter = (Vector2)transform.position + FlipVector(heavyAttack.hitboxOffset);
+                Gizmos.DrawWireCube(heavyCenter, heavyAttack.hitboxSize);
+            }
+        }
+        
+        // Health bar visualization (white outline)
+        if (healthBarRoot != null)
+        {
+            Gizmos.color = Color.white;
+            Vector3 hbPos = transform.position + new Vector3(healthBarOffsetX, healthBarOffsetY, 0f);
+            Vector3 hbSize = new Vector3(healthBarScaleX, healthBarScaleY, 0.01f);
+            Gizmos.DrawWireCube(hbPos, hbSize);
+        }
+    }
+    
+    void OnDrawGizmosSelected()
+    {
+        // Additional info when selected - show facing direction
+        Gizmos.color = faceRight ? Color.blue : Color.magenta;
+        Vector3 facingDir = (faceRight ? Vector3.right : Vector3.left) * 1.5f;
+        Gizmos.DrawLine(transform.position + Vector3.up * 0.5f, transform.position + Vector3.up * 0.5f + facingDir);
+        Gizmos.DrawSphere(transform.position + Vector3.up * 0.5f + facingDir, 0.1f);
     }
 }

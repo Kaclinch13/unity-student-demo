@@ -477,7 +477,7 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
---- !u!1001 &4997513630141215459
+--- !u!1001 &7591733644275850011
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -485,55 +485,55 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -0.5
+    - target: {fileID: 7074982674024716093, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
+      propertyPath: m_Name
+      value: DavidBlanco_DemoFighter
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -2.36
+      objectReference: {fileID: 0}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalPosition.y
       value: -3.54
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalPosition.z
       value: 0.65
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalRotation.w
       value: 1
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalRotation.x
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalRotation.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalRotation.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 2873177808030582668, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+    - target: {fileID: 7362659041766579710, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5468589996295641823, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
-      propertyPath: m_Name
-      value: DavidBlanco_DemoFighter
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: eef34216d92c36145a20c7a457e15b3b, type: 3}
+  m_SourcePrefab: {fileID: 100100000, guid: 99e6f903251c2eb4c93acd57a7a257e1, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -541,4 +541,4 @@ SceneRoots:
   - {fileID: 1553924234}
   - {fileID: 688311732}
   - {fileID: 614209559}
-  - {fileID: 4997513630141215459}
+  - {fileID: 7591733644275850011}
